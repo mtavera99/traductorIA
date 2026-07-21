@@ -1,0 +1,7 @@
+# Servidor XTTS para VozPuente.
+# Se usa el fork mantenido de Coqui TTS (el proyecto original fue archivado).
+coqui-tts>=0.24.0
+fastapi>=0.110
+uvicorn>=0.29
+soundfile>=0.12
+numpy
