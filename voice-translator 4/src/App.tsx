@@ -151,6 +151,11 @@ export default function App() {
 
   const whisperReady =
     state.settings.sttEngine === "whisper" && !!state.settings.xttsServerUrl;
+  const geminiSttReady =
+    state.settings.sttEngine === "gemini" && !!state.settings.geminiKey;
+  // STT por servidor/API listo (Whisper o Gemini): habilita los paneles aunque
+  // el navegador no soporte Web Speech.
+  const serverSttReady = whisperReady || geminiSttReady;
 
   // Panel "Escuchar": la otra persona habla -> lo oigo/leo en mi idioma.
   const listen = useTranslator({
@@ -321,7 +326,7 @@ export default function App() {
             error={listen.error}
             onToggle={() => (listen.active ? listen.stop() : listen.start())}
             onClear={listen.clear}
-            disabled={!recognitionOk && !whisperReady}
+            disabled={!recognitionOk && !serverSttReady}
           />
         </div>
 
@@ -346,7 +351,7 @@ export default function App() {
             error={speak.error}
             onToggle={() => (speak.active ? speak.stop() : speak.start())}
             onClear={speak.clear}
-            disabled={!recognitionOk && !whisperReady}
+            disabled={!recognitionOk && !serverSttReady}
           />
         </div>
       </main>

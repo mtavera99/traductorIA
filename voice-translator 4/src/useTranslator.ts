@@ -7,7 +7,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { SpeechRecognizer } from "./services/speechRecognition";
-import { WhisperRecognizer } from "./services/whisperStt";
+import { WhisperRecognizer, GeminiRecognizer } from "./services/whisperStt";
 import { speechQueue } from "./services/speechSynthesis";
 import { elevenLabsQueue } from "./services/elevenLabsTts";
 import { XttsPlayer } from "./services/xttsTts";
@@ -249,17 +249,25 @@ export function useTranslator(options: UseTranslatorOptions): TranslatorState {
       recognizerRef.current = null;
     }
     const opts = optionsRef.current;
+    const vadCbs = {
+      onInterim: (t: string) => setInterim(t === "…" ? "escuchando…" : t),
+      onFinal: handleFinal,
+      onError: (e: string) => setError(e),
+      onStateChange: (listening: boolean) => setActive(listening),
+    };
     if (opts.settings.sttEngine === "whisper" && opts.sttServerUrl) {
       recognizerRef.current = new WhisperRecognizer(
         opts.sttServerUrl,
         opts.sourceShort,
         opts.inputDeviceId,
-        {
-          onInterim: (t) => setInterim(t === "…" ? "escuchando…" : t),
-          onFinal: handleFinal,
-          onError: (e) => setError(e),
-          onStateChange: (listening) => setActive(listening),
-        }
+        vadCbs
+      );
+    } else if (opts.settings.sttEngine === "gemini" && opts.settings.geminiKey) {
+      recognizerRef.current = new GeminiRecognizer(
+        opts.settings.geminiKey,
+        opts.sourceShort,
+        opts.inputDeviceId,
+        vadCbs
       );
     } else {
       recognizerRef.current = new SpeechRecognizer(opts.sourceLang, {
