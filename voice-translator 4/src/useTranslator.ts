@@ -179,7 +179,7 @@ export function useTranslator(options: UseTranslatorOptions): TranslatorState {
       setError(`Error al traducir: ${msg}`);
       setSegments((prev) =>
         prev.map((s) =>
-          s.id === id ? { ...s, translated: "⚠️ (fallo de traducción)" } : s
+          s.id === id ? { ...s, translated: `⚠️ ${msg}` } : s
         )
       );
     }
@@ -261,9 +261,10 @@ export function useTranslator(options: UseTranslatorOptions): TranslatorState {
       onError: (e: string) => setError(e),
       onStateChange: (listening: boolean) => setActive(listening),
     };
-    // Por defecto la supresión de eco está activa; se puede desactivar para
-    // hablar de corrido (recomendado con auriculares).
-    const suppressEcho = opts.settings.echoSuppression !== false;
+    // Escucha continua por defecto: la app se usa con auriculares, así que no
+    // hay eco. La supresión solo se activa si el usuario la marca (para quien
+    // escuche por altavoz).
+    const suppressEcho = opts.settings.echoSuppression === true;
     if (opts.settings.sttEngine === "whisper" && opts.sttServerUrl) {
       recognizerRef.current = new WhisperRecognizer(
         opts.sttServerUrl,
