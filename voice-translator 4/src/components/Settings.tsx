@@ -276,6 +276,26 @@ export function Settings({
                 Motor de voz = XTTS.)
               </small>
             </div>
+
+            <div className="field">
+              <label>
+                <input
+                  type="checkbox"
+                  checked={settings.echoSuppression !== false}
+                  onChange={(e) =>
+                    onChange({ ...settings, echoSuppression: e.target.checked })
+                  }
+                  style={{ marginRight: 8 }}
+                />
+                Supresión de eco (pausa el micro mientras suena la traducción)
+              </label>
+              <small>
+                <strong>Desactívala si usas auriculares</strong> y quieres hablar
+                de corrido: así la app te sigue captando aunque el clon esté
+                hablando y no se omite nada. Déjala activada solo si escuchas la
+                traducción por altavoz (para evitar bucles).
+              </small>
+            </div>
           </>
         )}
 
