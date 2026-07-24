@@ -179,7 +179,7 @@ export function useTranslator(options: UseTranslatorOptions): TranslatorState {
       setError(`Error al traducir: ${msg}`);
       setSegments((prev) =>
         prev.map((s) =>
-          s.id === id ? { ...s, translated: "⚠️ (fallo de traducción)" } : s
+          s.id === id ? { ...s, translated: `⚠️ ${msg}` } : s
         )
       );
     }
