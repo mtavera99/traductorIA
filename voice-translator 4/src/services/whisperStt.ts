@@ -424,7 +424,7 @@ export class GeminiRecognizer extends VadRecognizer {
   protected async transcribe(wav: Blob): Promise<string> {
     const b64 = await blobToBase64(wav);
     const langName = LANG_NAMES[this.language] || this.language;
-    const model = "gemini-2.0-flash";
+    const model = "gemini-2.5-flash";
     const url =
       `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=` +
       encodeURIComponent(this.apiKey);
@@ -444,7 +444,9 @@ export class GeminiRecognizer extends VadRecognizer {
             ],
           },
         ],
-        generationConfig: { temperature: 0 },
+        // thinkingBudget 0 -> sin "pensamiento" = más rápido y barato (ideal
+        // para transcribir en tiempo real).
+        generationConfig: { temperature: 0, thinkingConfig: { thinkingBudget: 0 } },
       }),
     });
     if (!res.ok) {
