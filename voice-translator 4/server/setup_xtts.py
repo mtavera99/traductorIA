@@ -1,10 +1,64 @@
-import os, subprocess, sys, time, urllib.request, json
+import os, subprocess, sys, time, urllib.request, json, re
 
 # ============================================================
-#  VozPuente - Setup XTTS + Whisper (Google Colab)
-#  Traductor BIDIRECCIONAL: reconoce voz (Whisper) y genera
-#  voz clonada (XTTS) en la misma GPU. Baja latencia (streaming).
+#  VozPuente - Servidor XTTS + Whisper (Google Colab)
+#  ---------------------------------------------------------
+#  MODO "UN SOLO CLIC":
+#  Rellena VOZ_URL (abajo) UNA sola vez con un enlace de descarga
+#  directa a tu grabacion de voz. A partir de ahi, cada vez que
+#  ejecutes esta celda el servidor queda listo SIN subir nada.
+#
+#  Traductor BIDIRECCIONAL: reconoce voz (Whisper) y genera voz
+#  clonada (XTTS) en la misma GPU. Baja latencia (streaming).
 # ============================================================
+
+# ============================================================
+#  CONFIGURACION  (rellena UNA vez y no vuelvas a tocar)
+# ============================================================
+# --- Opcion A (RECOMENDADA, cero clics): enlace de DESCARGA DIRECTA a tu voz.
+#     * Google Drive: sube tu audio a Drive -> boton derecho -> Compartir ->
+#       "Cualquier persona con el enlace". Copia el ID del archivo (la parte
+#       larga de la URL) y pegalo aqui:
+#         VOZ_URL = "https://drive.google.com/uc?export=download&id=PON_AQUI_EL_ID"
+#     * Dropbox: pega el enlace para compartir y cambia el final "?dl=0" por "?dl=1".
+VOZ_URL = ""
+
+# --- Opcion B: montar tu Google Drive (1 clic de autorizacion la primera vez)
+#     y leer la voz desde una ruta fija dentro de tu Drive.
+USE_DRIVE = False
+DRIVE_VOZ_PATH = "/content/drive/MyDrive/vozpuente/voz_referencia.wav"
+
+# --- Opcion C (por defecto si dejas lo de arriba vacio): sube manualmente
+#     cualquier audio al panel de archivos de Colab y reejecuta esta celda.
+# ============================================================
+
+REF = "voz_referencia.wav"
+
+
+def _convert_to_ref(src):
+    """Convierte cualquier audio a WAV mono 24 kHz llamado voz_referencia.wav."""
+    subprocess.run(
+        ["ffmpeg", "-y", "-i", src, "-ac", "1", "-ar", "24000", REF],
+        check=False,
+    )
+
+
+print("== [0/4] Comprobando GPU ==", flush=True)
+try:
+    import torch
+
+    if not torch.cuda.is_available():
+        print("\n" + "=" * 58)
+        print(" AVISO: NO HAY GPU ACTIVA.")
+        print(" XTTS y Whisper iran lentisimos sin GPU.")
+        print(" Menu:  Entorno de ejecucion -> Cambiar tipo de entorno")
+        print("        -> Acelerador por hardware: GPU (T4) -> Guardar")
+        print(" Luego vuelve a ejecutar esta celda.")
+        print("=" * 58 + "\n", flush=True)
+    else:
+        print("   GPU detectada:", torch.cuda.get_device_name(0), flush=True)
+except Exception:
+    pass
 
 print("== [1/4] Instalando dependencias (2-4 min la primera vez) ==", flush=True)
 subprocess.run(
@@ -28,26 +82,52 @@ if not os.path.exists("/usr/local/bin/cloudflared"):
     )
     subprocess.run(["chmod", "+x", "/usr/local/bin/cloudflared"], check=False)
 
-print("== [3/4] Buscando tu muestra de voz ==", flush=True)
-REF = "voz_referencia.wav"
+print("== [3/4] Preparando tu muestra de voz ==", flush=True)
 if not os.path.exists(REF):
-    audio_exts = (".wav", ".mp3", ".m4a", ".aac", ".ogg", ".flac", ".mp4")
-    cands = [f for f in os.listdir(".") if f.lower().endswith(audio_exts)]
-    if cands:
-        print(f"   Convirtiendo {cands[0]} -> {REF}", flush=True)
-        subprocess.run(
-            ["ffmpeg", "-y", "-i", cands[0], "-ac", "1", "-ar", "24000", REF],
-            check=False,
-        )
+    # 1) Descarga directa desde VOZ_URL (cero clics).
+    if VOZ_URL:
+        try:
+            print("   Descargando tu voz desde VOZ_URL...", flush=True)
+            urllib.request.urlretrieve(VOZ_URL, "voz_descargada")
+            _convert_to_ref("voz_descargada")
+        except Exception as e:
+            print("   No se pudo descargar desde VOZ_URL:", e, flush=True)
+
+    # 2) Google Drive montado.
+    if not os.path.exists(REF) and USE_DRIVE:
+        try:
+            from google.colab import drive
+
+            drive.mount("/content/drive")
+            if os.path.exists(DRIVE_VOZ_PATH):
+                print(f"   Usando {DRIVE_VOZ_PATH}", flush=True)
+                _convert_to_ref(DRIVE_VOZ_PATH)
+            else:
+                print(f"   No existe {DRIVE_VOZ_PATH} en tu Drive.", flush=True)
+        except Exception as e:
+            print("   No se pudo usar Google Drive:", e, flush=True)
+
+    # 3) Cualquier audio subido a mano al panel de archivos.
+    if not os.path.exists(REF):
+        audio_exts = (".wav", ".mp3", ".m4a", ".aac", ".ogg", ".flac", ".mp4")
+        cands = [f for f in os.listdir(".") if f.lower().endswith(audio_exts)]
+        if cands:
+            print(f"   Convirtiendo {cands[0]} -> {REF}", flush=True)
+            _convert_to_ref(cands[0])
+
 if not os.path.exists(REF):
-    print("\n" + "=" * 50)
-    print("FALTA TU VOZ. Sube un archivo de audio de tu voz:")
-    print(" 1. Panel izquierdo -> icono de CARPETA.")
-    print(" 2. Boton SUBIR (hoja con flecha).")
-    print(" 3. Elige tu grabacion (wav/mp3/m4a).")
-    print(" 4. Vuelve a ejecutar esta celda.")
-    print("=" * 50)
+    print("\n" + "=" * 58)
+    print(" FALTA TU VOZ.")
+    print(" Para el modo 'un solo clic': rellena la variable VOZ_URL")
+    print(" (arriba del todo) con un enlace de descarga directa a tu")
+    print(" grabacion (45-60 seg hablando claro) y reejecuta la celda.")
+    print("")
+    print(" Alternativa: sube el audio con el icono de CARPETA del panel")
+    print(" izquierdo (boton SUBIR) y vuelve a ejecutar esta celda.")
+    print("=" * 58)
     sys.exit(1)
+
+print("   Voz lista:", REF, flush=True)
 
 os.environ["COQUI_TOS_AGREED"] = "1"
 os.environ["XTTS_REF_WAV"] = REF
@@ -248,6 +328,28 @@ if not ready:
     print("\nEl servidor no arranco a tiempo. Revisa si hubo errores rojos arriba.")
     sys.exit(1)
 
-print("\n\n== SERVIDOR LISTO (voz + reconocimiento) ==", flush=True)
-print(">>> Copia abajo la linea que termina en .trycloudflare.com <<<\n", flush=True)
-subprocess.run(["cloudflared", "tunnel", "--no-autoupdate", "--url", "http://localhost:8020"])
+print("\n\n== SERVIDOR LISTO (voz + reconocimiento). Abriendo tunel publico... ==", flush=True)
+print("   (en unos segundos aparecera tu enlace)\n", flush=True)
+
+# Abrimos el tunel y capturamos su salida para mostrar el enlace bien visible.
+tun = subprocess.Popen(
+    ["cloudflared", "tunnel", "--no-autoupdate", "--url", "http://localhost:8020"],
+    stdout=subprocess.PIPE,
+    stderr=subprocess.STDOUT,
+    text=True,
+)
+url = None
+for line in tun.stdout:
+    print(line, end="")
+    m = re.search(r"https://[-\w]+\.trycloudflare\.com", line)
+    if m and not url:
+        url = m.group(0)
+        print("\n" + "#" * 60)
+        print("#")
+        print("#   TU ENLACE (pegalo en la app -> URL del servidor):")
+        print("#")
+        print("#      " + url)
+        print("#")
+        print("#   Deja esta celda EJECUTANDOSE mientras uses la app.")
+        print("#" * 60 + "\n", flush=True)
+tun.wait()
