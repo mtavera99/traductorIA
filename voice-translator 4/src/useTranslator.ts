@@ -37,6 +37,19 @@ function countWords(t: string): number {
   return s ? s.split(/\s+/).length : 0;
 }
 
+// Ventana para descartar la MISMA frase repetida (eco/duplicado de captura).
+const DEDUPE_MS = 6000;
+
+// Normaliza texto para comparar duplicados: minúsculas, sin acentos ni signos.
+function normalizeText(t: string): string {
+  return t
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
 export interface UseTranslatorOptions {
   sourceLang: string;
   targetLang: string;
@@ -79,11 +92,28 @@ export function useTranslator(options: UseTranslatorOptions): TranslatorState {
   const committedRef = useRef(""); // texto ya traducido de la frase en curso
   const latestInterimRef = useRef(""); // último interim recibido
   const flushTimerRef = useRef<number | null>(null);
+  // Última frase confirmada (para descartar duplicados/eco).
+  const lastCommitRef = useRef<{ norm: string; ts: number }>({ norm: "", ts: 0 });
 
   // Traduce un trozo de texto, lo muestra como segmento y lo reproduce.
   const commitChunk = useCallback(async (text: string) => {
     const clean = text.trim();
     if (!clean) return;
+
+    // Anti-duplicado: descarta la misma frase si llega repetida en pocos
+    // segundos (típico del eco: el micro capta la voz reproducida y se
+    // re-transcribe casi idéntica).
+    const norm = normalizeText(clean);
+    const now = Date.now();
+    if (
+      norm &&
+      norm === lastCommitRef.current.norm &&
+      now - lastCommitRef.current.ts < DEDUPE_MS
+    ) {
+      return;
+    }
+    lastCommitRef.current = { norm, ts: now };
+
     const id = nextId();
     const segment: TranscriptSegment = {
       id,
