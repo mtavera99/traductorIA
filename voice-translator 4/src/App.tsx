@@ -32,7 +32,10 @@ interface PersistedState {
 const DEFAULTS: PersistedState = {
   myLang: "es-ES",
   otherLang: "en-US",
-  settings: { provider: "google" },
+  // Preconfigurado para uso real: reconocimiento por Whisper y voz clonada por
+  // XTTS (ambos usan el servidor de Colab). Así lo único que hay que rellenar
+  // es la URL del servidor en Ajustes.
+  settings: { provider: "google", sttEngine: "whisper", ttsEngine: "xtts" },
   myVoiceURI: "",
   otherVoiceURI: "",
   rate: 1,
@@ -42,6 +45,21 @@ const DEFAULTS: PersistedState = {
   speakInputId: "",
   listenOutputId: "",
 };
+
+/**
+ * Devuelve el deviceId del primer dispositivo cuya etiqueta contenga alguna de
+ * las palabras clave (en orden de preferencia). "" si no hay coincidencia.
+ */
+function pickByKeywords(
+  devices: { deviceId: string; label: string }[],
+  keywords: string[]
+): string {
+  for (const kw of keywords) {
+    const match = devices.find((d) => d.label.toLowerCase().includes(kw));
+    if (match) return match.deviceId;
+  }
+  return "";
+}
 
 function loadPersisted(): PersistedState {
   try {
@@ -84,7 +102,8 @@ export default function App() {
     });
   }, []);
 
-  // Lista de dispositivos de entrada (para el modo Whisper).
+  // Lista de dispositivos de entrada (para el modo Whisper) y autoselección
+  // por nombre, para que el usuario no tenga que elegirlos a mano.
   const refreshDevices = async () => {
     try {
       const s = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -92,8 +111,38 @@ export default function App() {
     } catch {
       /* sin permiso todavía; se listarán sin etiqueta */
     }
-    setAudioInputs(await listAudioInputs());
-    setAudioOutputs(await listAudioOutputs());
+    const inputs = await listAudioInputs();
+    const outputs = await listAudioOutputs();
+    setAudioInputs(inputs);
+    setAudioOutputs(outputs);
+
+    // Autoselección: solo rellena lo que aún esté vacío y haya un match claro.
+    // Así, tras dar permiso al micrófono, los dispositivos se eligen solos y
+    // el usuario únicamente tiene que pegar la URL del servidor.
+    setState((prev) => {
+      const patch: Partial<PersistedState> = {};
+      if (!prev.listenInputId) {
+        // Panel Escuchar = audio de la llamada (cable virtual BlackHole 2ch).
+        const id = pickByKeywords(inputs, ["blackhole 2"]);
+        if (id) patch.listenInputId = id;
+      }
+      if (!prev.speakInputId) {
+        // Panel Hablar = tu micrófono real (integrado del portátil).
+        const id = pickByKeywords(inputs, [
+          "macbook",
+          "built-in",
+          "integrado",
+          "internal",
+        ]);
+        if (id) patch.speakInputId = id;
+      }
+      if (!prev.listenOutputId) {
+        // Salida del panel Escuchar = tus auriculares (solo para ti).
+        const id = pickByKeywords(outputs, ["airpod", "auricular", "headphone"]);
+        if (id) patch.listenOutputId = id;
+      }
+      return Object.keys(patch).length ? { ...prev, ...patch } : prev;
+    });
   };
 
   useEffect(() => {

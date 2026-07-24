@@ -9,66 +9,39 @@ Necesitas una **muestra de tu voz** (`voz_referencia.wav`, 15–60 seg hablando 
 
 ---
 
-## 🟢 Opción 1 — Google Colab (GPU gratis, recomendado)
+## 🟢 Opción 1 — Google Colab (GPU gratis, recomendado) · MODO UN SOLO CLIC
+
+Con `setup_xtts.py` **todo va en una sola celda**. Se configura **una vez** y
+después usarlo es literalmente: abrir el cuaderno → pulsar ▶️ → copiar el enlace.
+
+### Preparación (solo la primera vez)
 
 1. Abre https://colab.research.google.com → **Nuevo cuaderno**.
 2. Menú **Entorno de ejecución → Cambiar tipo de entorno → GPU (T4)** → Guardar.
-3. Pega y ejecuta estas celdas **una por una**:
+   *(Esto queda guardado en el cuaderno, no hay que repetirlo.)*
+3. Sube tu muestra de voz a un sitio con **enlace de descarga directa** y copia ese enlace:
+   - **Google Drive:** sube tu audio → botón derecho → *Compartir* → “Cualquiera con el
+     enlace” → copia el **ID** del archivo (la parte larga de la URL). Tu enlace será:
+     `https://drive.google.com/uc?export=download&id=EL_ID`
+   - **Dropbox:** copia el enlace para compartir y cambia el final `?dl=0` por `?dl=1`.
+4. Pega **todo el contenido de `setup_xtts.py`** en la primera celda del cuaderno.
+5. Arriba del archivo, rellena la variable **`VOZ_URL`** con tu enlace del paso 3.
 
-**Celda 1 — Instalar dependencias:**
-```python
-!pip -q install coqui-tts fastapi "uvicorn[standard]" soundfile numpy
-!wget -q https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64 -O /usr/local/bin/cloudflared
-!chmod +x /usr/local/bin/cloudflared
-```
+### Uso diario (un clic)
 
-**Celda 2 — Subir tu muestra de voz** (elige un `.wav` de tu voz):
-```python
-from google.colab import files
-up = files.upload()
-import os
-fn = list(up.keys())[0]
-os.rename(fn, "voz_referencia.wav")
-print("Guardado como voz_referencia.wav")
-```
+1. Abre el cuaderno y pulsa ▶️ en la celda.
+2. Espera a que aparezca el recuadro con tu enlace `https://….trycloudflare.com`.
+3. Cópialo y pégalo en **VozPuente → ⚙️ Ajustes → URL del servidor** → **Probar conexión**.
 
-**Celda 3 — Crear el servidor** (copia aquí el contenido de `xtts_server.py`):
-```python
-%%writefile xtts_server.py
-# >>> PEGA AQUÍ TODO EL CONTENIDO DEL ARCHIVO xtts_server.py <<<
-```
+> La voz se **descarga sola** desde `VOZ_URL`, así que no tienes que volver a subir
+> nada aunque Colab reinicie el entorno.
 
-**Celda 4 — Lanzar el servidor + túnel público:**
-```python
-import os, subprocess, time, re
-os.environ["COQUI_TOS_AGREED"] = "1"          # acepta licencia XTTS (no interactivo)
-os.environ["XTTS_REF_WAV"] = "voz_referencia.wav"
+> **Alternativas a `VOZ_URL`:** poner `USE_DRIVE = True` (monta tu Drive con 1 clic de
+> permiso y lee la voz de una ruta fija), o dejar ambas vacías y subir el audio a mano
+> al panel de archivos de Colab.
 
-# Arranca el servidor (carga el modelo; tarda ~1-2 min)
-srv = subprocess.Popen(["python", "xtts_server.py"])
-print("Cargando modelo XTTS... espera ~90s")
-time.sleep(100)
-
-# Abre un túnel HTTPS público
-tun = subprocess.Popen(
-    ["cloudflared", "tunnel", "--no-autoupdate", "--url", "http://localhost:8020"],
-    stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
-)
-url = None
-for line in tun.stdout:
-    print(line, end="")
-    m = re.search(r"https://[-\w]+\.trycloudflare\.com", line)
-    if m:
-        url = m.group(0)
-        print("\n\n✅ URL de tu servidor XTTS:", url, "\n")
-        break
-```
-
-4. Copia la **URL `https://….trycloudflare.com`** que aparece.
-5. En VozPuente → **⚙️ Ajustes → Motor de voz → XTTS** → pega esa URL → **Probar conexión**.
-
-> Mantén la pestaña de Colab abierta mientras lo uses. Colab gratis se
-> desconecta tras un rato de inactividad; si pasa, vuelve a ejecutar la Celda 4.
+> ⚠️ Colab gratis se desconecta tras un rato de inactividad y el enlace **cambia**
+> cada vez que reinicias. Si pasa, vuelve a pulsar ▶️ y pega el enlace nuevo.
 
 ---
 
