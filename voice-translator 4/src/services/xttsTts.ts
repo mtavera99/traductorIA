@@ -3,6 +3,8 @@
 // de audio configurable (setSinkId), para poder mandar el español solo a los
 // AirPods y el inglés al cable virtual, sin mezclarse.
 
+import { ttsBegin, ttsEnd } from "./ttsGate";
+
 export interface XttsSpeakOptions {
   text: string;
   serverUrl: string;
@@ -85,6 +87,9 @@ export class XttsPlayer {
       return;
     }
     this.playing = true;
+    // Cierra la puerta anti-eco mientras suena esta reproducción, para que los
+    // reconocedores no capten (y re-traduzcan) la propia voz traducida.
+    ttsBegin();
     try {
       await this.playStream(options);
     } catch {
@@ -93,6 +98,8 @@ export class XttsPlayer {
       } catch (e2) {
         options.onError?.(e2 instanceof Error ? e2.message : String(e2));
       }
+    } finally {
+      ttsEnd();
     }
     void this.processNext();
   }

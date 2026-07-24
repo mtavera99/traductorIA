@@ -2,8 +2,13 @@
 // dispositivo de entrada CONCRETO. Esto permite que "Escuchar" y "Hablar" usen
 // fuentes distintas a la vez (p. ej. BlackHole y tu micrófono).
 //
+// Anti-eco: mientras suena una reproducción TTS (ttsIsActive), se ignora el
+// audio capturado para no re-transcribir la voz traducida y evitar bucles.
+//
 // Segmenta por energía (VAD sencillo): acumula audio mientras hablas y, al
 // detectar una pausa, envía ese trozo a /stt y devuelve el texto.
+
+import { ttsIsActive } from "./ttsGate";
 
 export interface WhisperCallbacks {
   onInterim?: (text: string) => void;
@@ -205,6 +210,21 @@ export class WhisperRecognizer {
   }
 
   private handleFrame(frame: Float32Array): void {
+    // Anti-eco: si está sonando una traducción, descarta lo captado para no
+    // crear un bucle de realimentación (voz traducida -> micro -> re-traducida).
+    if (ttsIsActive()) {
+      if (this.speaking) {
+        this.speaking = false;
+        this.segment = [];
+        this.segmentMs = 0;
+        this.silenceMs = 0;
+        this.maxRms = 0;
+        this.cbs.onInterim?.("");
+      }
+      this.preroll = [];
+      return;
+    }
+
     let sum = 0;
     for (let i = 0; i < frame.length; i++) sum += frame[i] * frame[i];
     const rms = Math.sqrt(sum / frame.length);
@@ -275,7 +295,21 @@ export class WhisperRecognizer {
         method: "POST",
         body: form,
       });
-      if (!res.ok) throw new Error(`STT HTTP ${res.status}`);
+      if (!res.ok) {
+        // Intenta mostrar el motivo REAL del servidor (no solo el código).
+        let detail = "";
+        try {
+          const j = (await res.json()) as { detail?: string };
+          detail = j.detail || "";
+        } catch {
+          try {
+            detail = await res.text();
+          } catch {
+            /* noop */
+          }
+        }
+        throw new Error(`STT HTTP ${res.status}${detail ? ` — ${detail}` : ""}`);
+      }
       const data = (await res.json()) as { text?: string };
       const text = (data.text || "").trim();
       if (text && !looksLikeHallucination(text)) this.cbs.onFinal?.(text);
