@@ -71,6 +71,9 @@ export function Settings({
   const ttsEngine: TtsEngine = settings.ttsEngine ?? "browser";
   const usingBrowserTts = ttsEngine === "browser";
   const sttEngine: SttEngine = settings.sttEngine ?? "browser";
+  // Whisper y Gemini capturan de un dispositivo concreto y permiten ambas
+  // direcciones a la vez; comparten los mismos selectores de audio.
+  const serverStt = sttEngine === "whisper" || sttEngine === "gemini";
 
   const testElevenLabs = async () => {
     if (!settings.elevenLabsKey) {
@@ -157,37 +160,63 @@ export function Settings({
           >
             <option value="browser">Navegador (rápido · un solo micrófono)</option>
             <option value="whisper">Whisper · servidor (preciso · bidireccional)</option>
+            <option value="gemini">Gemini · API (preciso · NO usa la GPU del Colab)</option>
           </select>
           <small>
-            {sttEngine === "browser"
-              ? "Usa el micrófono del sistema. No permite Escuchar y Hablar a la vez."
-              : "Preciso y permite ambas direcciones SIMULTÁNEAS. Usa el mismo servidor de Colab que XTTS."}
+            {sttEngine === "browser" &&
+              "Usa el micrófono del sistema. No permite Escuchar y Hablar a la vez."}
+            {sttEngine === "whisper" &&
+              "Preciso y permite ambas direcciones SIMULTÁNEAS. Usa la GPU del servidor de Colab (la misma que XTTS)."}
+            {sttEngine === "gemini" &&
+              "Preciso y bidireccional. Transcribe con la API de Gemini, así NO carga la GPU del Colab (menos errores y más fluido). Requiere API key."}
           </small>
         </div>
 
         {sttEngine === "whisper" && (
-          <>
-            <div className="field">
-              <label>URL del servidor (Whisper + XTTS)</label>
-              <input
-                type="text"
-                placeholder="https://xxxx.trycloudflare.com"
-                value={settings.xttsServerUrl ?? ""}
-                onChange={(e) =>
-                  onChange({ ...settings, xttsServerUrl: e.target.value })
-                }
-              />
-              <button
-                type="button"
-                className="btn ghost"
-                style={{ marginTop: 6 }}
-                onClick={testXtts}
-              >
-                Probar conexión con el servidor
-              </button>
-              {xttsTest && <small>{xttsTest}</small>}
-            </div>
+          <div className="field">
+            <label>URL del servidor (Whisper + XTTS)</label>
+            <input
+              type="text"
+              placeholder="https://xxxx.trycloudflare.com"
+              value={settings.xttsServerUrl ?? ""}
+              onChange={(e) =>
+                onChange({ ...settings, xttsServerUrl: e.target.value })
+              }
+            />
+            <button
+              type="button"
+              className="btn ghost"
+              style={{ marginTop: 6 }}
+              onClick={testXtts}
+            >
+              Probar conexión con el servidor
+            </button>
+            {xttsTest && <small>{xttsTest}</small>}
+          </div>
+        )}
 
+        {sttEngine === "gemini" && (
+          <div className="field">
+            <label>API key de Gemini (reconocimiento de voz)</label>
+            <input
+              type="password"
+              placeholder="Pega tu API key de Google AI Studio"
+              value={settings.geminiKey ?? ""}
+              onChange={(e) =>
+                onChange({ ...settings, geminiKey: e.target.value })
+              }
+            />
+            <small>
+              Puede ser la misma key de Gemini que usas para traducir. Se guarda
+              solo en tu navegador (localStorage). Recuerda que sigues
+              necesitando el servidor de Colab para la <strong>voz clonada</strong>{" "}
+              (XTTS).
+            </small>
+          </div>
+        )}
+
+        {serverStt && (
+          <>
             <div className="field">
               <label>🎧 Entrada del panel Escuchar (voz de ELLOS)</label>
               <select

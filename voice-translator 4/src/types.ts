@@ -39,7 +39,7 @@ export type ProviderId =
 export type TtsEngine = "browser" | "elevenlabs" | "xtts";
 
 /** Motor de reconocimiento de voz (STT). */
-export type SttEngine = "browser" | "whisper";
+export type SttEngine = "browser" | "whisper" | "gemini";
 
 export interface TranslationSettings {
   provider: ProviderId;
@@ -49,8 +49,14 @@ export interface TranslationSettings {
   libreEndpoint?: string;
 
   // --- Motor de reconocimiento (STT) ---
-  /** "browser" = Web Speech (un solo micrófono). "whisper" = servidor (por dispositivo). */
+  /**
+   * "browser" = Web Speech (un solo micrófono).
+   * "whisper" = servidor Colab (por dispositivo).
+   * "gemini"  = API de Gemini (por dispositivo, NO usa la GPU del Colab).
+   */
   sttEngine?: SttEngine;
+  /** API key de Gemini para el reconocimiento de voz (STT). Solo en localStorage. */
+  geminiKey?: string;
 
   // --- Motor de voz (TTS) ---
   /** "browser" = voces del navegador (gratis). "elevenlabs" = tu voz clonada. */
