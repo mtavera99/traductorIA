@@ -281,19 +281,19 @@ export function Settings({
               <label>
                 <input
                   type="checkbox"
-                  checked={settings.echoSuppression !== false}
+                  checked={settings.echoSuppression === true}
                   onChange={(e) =>
                     onChange({ ...settings, echoSuppression: e.target.checked })
                   }
                   style={{ marginRight: 8 }}
                 />
-                Supresión de eco (pausa el micro mientras suena la traducción)
+                Supresión de eco (solo si escuchas por altavoz)
               </label>
               <small>
-                <strong>Desactívala si usas auriculares</strong> y quieres hablar
-                de corrido: así la app te sigue captando aunque el clon esté
-                hablando y no se omite nada. Déjala activada solo si escuchas la
-                traducción por altavoz (para evitar bucles).
+                <strong>Déjala DESMARCADA si usas auriculares</strong> (lo normal):
+                así la app te capta de corrido aunque el clon esté hablando y no
+                se omite nada. Márcala solo si escuchas la traducción por altavoz,
+                para evitar bucles de eco.
               </small>
             </div>
           </>
