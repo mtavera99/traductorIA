@@ -25,7 +25,11 @@ const RMS_THRESHOLD = 0.02; // energía mínima para considerar "voz activa"
 const SPEECH_RMS = 0.045; // el pico del segmento debe superar esto (voz real)
 const HANGOVER_MS = 650; // silencio para cerrar la frase
 const MIN_SEGMENT_MS = 450; // ignora ruiditos muy cortos
-const MAX_SEGMENT_MS = 12000; // corta frases larguísimas
+// Corte de seguridad para discursos SIN pausas. Antes 12s (para proteger la GPU
+// de Whisper); con Gemini/STT en la nube podemos permitir frases más largas, así
+// evitamos cortar a media frase (lo que provocaba duplicados). Las pausas
+// naturales (>HANGOVER_MS) siguen soltando trozos antes de llegar a este tope.
+const MAX_SEGMENT_MS = 20000;
 const PREROLL_FRAMES = 2; // incluye un poco de audio previo al inicio
 
 // Nombres de idioma para el prompt de Gemini (a partir del código corto).

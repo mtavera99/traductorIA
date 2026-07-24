@@ -37,8 +37,8 @@ function countWords(t: string): number {
   return s ? s.split(/\s+/).length : 0;
 }
 
-// Ventana para descartar la MISMA frase repetida (eco/duplicado de captura).
-const DEDUPE_MS = 6000;
+// Ventana para descartar frases repetidas (eco, o re-envíos en discursos largos).
+const DEDUPE_MS = 15000;
 
 // Normaliza texto para comparar duplicados: minúsculas, sin acentos ni signos.
 function normalizeText(t: string): string {
@@ -92,27 +92,33 @@ export function useTranslator(options: UseTranslatorOptions): TranslatorState {
   const committedRef = useRef(""); // texto ya traducido de la frase en curso
   const latestInterimRef = useRef(""); // último interim recibido
   const flushTimerRef = useRef<number | null>(null);
-  // Última frase confirmada (para descartar duplicados/eco).
-  const lastCommitRef = useRef<{ norm: string; ts: number }>({ norm: "", ts: 0 });
+  // Frases confirmadas recientemente (para descartar duplicados y solapes).
+  const recentCommitsRef = useRef<{ norm: string; ts: number }[]>([]);
 
   // Traduce un trozo de texto, lo muestra como segmento y lo reproduce.
   const commitChunk = useCallback(async (text: string) => {
     const clean = text.trim();
     if (!clean) return;
 
-    // Anti-duplicado: descarta la misma frase si llega repetida en pocos
-    // segundos (típico del eco: el micro capta la voz reproducida y se
-    // re-transcribe casi idéntica).
+    // Anti-duplicado: en discursos largos (o por eco) puede llegar la misma
+    // frase repetida, o un trozo que solapa con lo ya dicho. Se descarta si es
+    // idéntica a algo reciente, o si una contiene a la otra (solape de frases
+    // largas partidas). Se comparan las últimas frases dentro de una ventana.
     const norm = normalizeText(clean);
     const now = Date.now();
-    if (
-      norm &&
-      norm === lastCommitRef.current.norm &&
-      now - lastCommitRef.current.ts < DEDUPE_MS
-    ) {
-      return;
-    }
-    lastCommitRef.current = { norm, ts: now };
+    recentCommitsRef.current = recentCommitsRef.current.filter(
+      (c) => now - c.ts < DEDUPE_MS
+    );
+    const isDuplicate = recentCommitsRef.current.some((c) => {
+      if (c.norm === norm) return true;
+      // Solape: una frase larga contiene a la otra (evita repetir el trozo).
+      if (norm.length >= 15 && c.norm.length >= 15) {
+        return c.norm.includes(norm) || norm.includes(c.norm);
+      }
+      return false;
+    });
+    if (norm && isDuplicate) return;
+    recentCommitsRef.current.push({ norm, ts: now });
 
     const id = nextId();
     const segment: TranscriptSegment = {
