@@ -21,12 +21,20 @@ import os, subprocess, sys, time, urllib.request, json, re
 #       larga de la URL) y pegalo aqui:
 #         VOZ_URL = "https://drive.google.com/uc?export=download&id=PON_AQUI_EL_ID"
 #     * Dropbox: pega el enlace para compartir y cambia el final "?dl=0" por "?dl=1".
+#
+#   Puedes pegar el enlace aqui abajo, O definirlo en una celda ANTERIOR con:
+#       import os; os.environ["VOZ_URL"] = "https://...."
+#   (util en el movil, para no editar este archivo largo).
 VOZ_URL = ""
+if not VOZ_URL:
+    VOZ_URL = os.environ.get("VOZ_URL", "")
 
 # --- Opcion B: montar tu Google Drive (1 clic de autorizacion la primera vez)
 #     y leer la voz desde una ruta fija dentro de tu Drive.
-USE_DRIVE = False
-DRIVE_VOZ_PATH = "/content/drive/MyDrive/vozpuente/voz_referencia.wav"
+USE_DRIVE = os.environ.get("USE_DRIVE", "").lower() in ("1", "true", "yes")
+DRIVE_VOZ_PATH = os.environ.get(
+    "DRIVE_VOZ_PATH", "/content/drive/MyDrive/vozpuente/voz_referencia.wav"
+)
 
 # --- Opcion C (por defecto si dejas lo de arriba vacio): sube manualmente
 #     cualquier audio al panel de archivos de Colab y reejecuta esta celda.
