@@ -246,10 +246,16 @@ async def stt(audio: UploadFile = File(...), language: str = Form("es")):
         return {"text": ""}
     lang = language if language in SUPPORTED else "es"
     try:
-        out = asr(data, generate_kwargs={"language": lang, "task": "transcribe"})
+        out = asr(
+            data,
+            generate_kwargs={"language": lang, "task": "transcribe"},
+            return_timestamps=False,
+        )
         return {"text": (out.get("text") or "").strip()}
     except Exception as e:
-        raise HTTPException(500, f"stt error: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(500, f"stt error: {type(e).__name__}: {e}")
 
 # ---- TTS streaming: texto -> voz (por trozos) ----
 def pcm_generator(text, lang):

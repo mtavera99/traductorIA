@@ -295,7 +295,21 @@ export class WhisperRecognizer {
         method: "POST",
         body: form,
       });
-      if (!res.ok) throw new Error(`STT HTTP ${res.status}`);
+      if (!res.ok) {
+        // Intenta mostrar el motivo REAL del servidor (no solo el código).
+        let detail = "";
+        try {
+          const j = (await res.json()) as { detail?: string };
+          detail = j.detail || "";
+        } catch {
+          try {
+            detail = await res.text();
+          } catch {
+            /* noop */
+          }
+        }
+        throw new Error(`STT HTTP ${res.status}${detail ? ` — ${detail}` : ""}`);
+      }
       const data = (await res.json()) as { text?: string };
       const text = (data.text || "").trim();
       if (text && !looksLikeHallucination(text)) this.cbs.onFinal?.(text);
