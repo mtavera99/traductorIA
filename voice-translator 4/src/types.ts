@@ -57,6 +57,12 @@ export interface TranslationSettings {
   sttEngine?: SttEngine;
   /** API key de Gemini para el reconocimiento de voz (STT). Solo en localStorage. */
   geminiKey?: string;
+  /**
+   * Supresión de eco: si es true (por defecto), el reconocedor deja de captar
+   * mientras suena la traducción (evita bucles con altavoz). Desactívala si
+   * usas auriculares y quieres hablar de corrido sin que se corte.
+   */
+  echoSuppression?: boolean;
 
   // --- Motor de voz (TTS) ---
   /** "browser" = voces del navegador (gratis). "elevenlabs" = tu voz clonada. */

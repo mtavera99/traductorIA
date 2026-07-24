@@ -165,6 +165,10 @@ export abstract class VadRecognizer {
   protected language: string;
   private deviceId: string | undefined;
   private cbs: WhisperCallbacks;
+  // Si true, deja de captar mientras suena una traducción (anti-eco). Con
+  // auriculares + cable virtual no hace falta, y desactivarlo permite hablar
+  // de corrido sin perder nada.
+  private suppressEcho: boolean;
 
   private stream: MediaStream | null = null;
   private ctx: AudioContext | null = null;
@@ -183,11 +187,13 @@ export abstract class VadRecognizer {
   constructor(
     language: string,
     deviceId: string | undefined,
-    cbs: WhisperCallbacks = {}
+    cbs: WhisperCallbacks = {},
+    suppressEcho = true
   ) {
     this.language = language;
     this.deviceId = deviceId;
     this.cbs = cbs;
+    this.suppressEcho = suppressEcho;
   }
 
   setLanguage(lang: string): void {
@@ -241,9 +247,10 @@ export abstract class VadRecognizer {
   }
 
   private handleFrame(frame: Float32Array): void {
-    // Anti-eco: si está sonando una traducción, descarta lo captado para no
-    // crear un bucle de realimentación (voz traducida -> micro -> re-traducida).
-    if (ttsIsActive()) {
+    // Anti-eco (opcional): si está sonando una traducción, descarta lo captado
+    // para no crear un bucle (voz traducida -> micro -> re-traducida). Se puede
+    // desactivar para hablar de corrido cuando se usan auriculares.
+    if (this.suppressEcho && ttsIsActive()) {
       if (this.speaking) {
         this.speaking = false;
         this.segment = [];
@@ -374,9 +381,10 @@ export class WhisperRecognizer extends VadRecognizer {
     serverUrl: string,
     language: string,
     deviceId: string | undefined,
-    cbs: WhisperCallbacks = {}
+    cbs: WhisperCallbacks = {},
+    suppressEcho = true
   ) {
-    super(language, deviceId, cbs);
+    super(language, deviceId, cbs, suppressEcho);
     this.serverUrl = serverUrl.replace(/\/$/, "");
   }
 
@@ -419,9 +427,10 @@ export class GeminiRecognizer extends VadRecognizer {
     apiKey: string,
     language: string,
     deviceId: string | undefined,
-    cbs: WhisperCallbacks = {}
+    cbs: WhisperCallbacks = {},
+    suppressEcho = true
   ) {
-    super(language, deviceId, cbs);
+    super(language, deviceId, cbs, suppressEcho);
     this.apiKey = apiKey;
   }
 

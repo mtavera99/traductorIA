@@ -261,19 +261,24 @@ export function useTranslator(options: UseTranslatorOptions): TranslatorState {
       onError: (e: string) => setError(e),
       onStateChange: (listening: boolean) => setActive(listening),
     };
+    // Por defecto la supresión de eco está activa; se puede desactivar para
+    // hablar de corrido (recomendado con auriculares).
+    const suppressEcho = opts.settings.echoSuppression !== false;
     if (opts.settings.sttEngine === "whisper" && opts.sttServerUrl) {
       recognizerRef.current = new WhisperRecognizer(
         opts.sttServerUrl,
         opts.sourceShort,
         opts.inputDeviceId,
-        vadCbs
+        vadCbs,
+        suppressEcho
       );
     } else if (opts.settings.sttEngine === "gemini" && opts.settings.geminiKey) {
       recognizerRef.current = new GeminiRecognizer(
         opts.settings.geminiKey,
         opts.sourceShort,
         opts.inputDeviceId,
-        vadCbs
+        vadCbs,
+        suppressEcho
       );
     } else {
       recognizerRef.current = new SpeechRecognizer(opts.sourceLang, {
