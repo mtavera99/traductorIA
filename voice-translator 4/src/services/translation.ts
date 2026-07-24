@@ -91,7 +91,7 @@ async function translateGemini({
   settings,
 }: TranslateParams): Promise<string> {
   if (!settings.apiKey) throw new TranslationError("Falta la API key de Gemini");
-  const model = "gemini-2.0-flash";
+  const model = "gemini-2.5-flash";
   const url =
     `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=` +
     encodeURIComponent(settings.apiKey);
@@ -105,7 +105,11 @@ async function translateGemini({
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       contents: [{ parts: [{ text: prompt }] }],
-      generationConfig: { temperature: 0.2 },
+      // thinkingBudget 0 -> traducción más rápida (sin fase de "pensamiento").
+      generationConfig: {
+        temperature: 0.2,
+        thinkingConfig: { thinkingBudget: 0 },
+      },
     }),
   });
   if (!res.ok) throw new TranslationError(`Gemini HTTP ${res.status}`);
