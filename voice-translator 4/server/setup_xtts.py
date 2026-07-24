@@ -141,7 +141,7 @@ os.environ["COQUI_TOS_AGREED"] = "1"
 os.environ["XTTS_REF_WAV"] = REF
 
 SERVER = r'''
-import io, os, re
+import io, os, re, threading
 import numpy as np
 import torch
 import uvicorn
@@ -175,6 +175,13 @@ REF_WAV = os.environ.get("XTTS_REF_WAV", "voz_referencia.wav")
 PORT = int(os.environ.get("XTTS_PORT", "8020"))
 SUPPORTED = {"en","es","fr","de","it","pt","pl","tr","ru","nl","cs","ar","zh-cn","ja","hu","ko","hi"}
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
+
+# Serializa TODO el acceso a la GPU. XTTS y Whisper comparten la misma GPU y NO
+# son seguros ante llamadas concurrentes: si dos peticiones coinciden (p. ej.
+# los dos paneles, o trozos solapados), corrompen el contexto CUDA -> se dispara
+# un "device-side assert" y a partir de ahi TODO falla hasta reiniciar. Con este
+# lock, solo una inferencia (STT o TTS) corre a la vez.
+GPU_LOCK = threading.RLock()
 
 # -------- XTTS (voz clonada) --------
 print("[XTTS] Cargando modelo en", DEVICE, flush=True)
@@ -237,20 +244,24 @@ def health():
     return {"status": "ok", "device": DEVICE, "stream": STREAM_OK, "whisper": WHISPER_OK}
 
 # ---- STT: audio -> texto ----
+# Nota: 'def' (no 'async') a proposito -> FastAPI lo corre en el threadpool, de
+# modo que esperar el GPU_LOCK no bloquea el event loop (evita interbloqueos con
+# el streaming de TTS, que tambien corre en threadpool).
 @app.post("/stt")
-async def stt(audio: UploadFile = File(...), language: str = Form("es")):
+def stt(audio: UploadFile = File(...), language: str = Form("es")):
     if not WHISPER_OK:
         raise HTTPException(400, "whisper no disponible")
-    data = await audio.read()
+    data = audio.file.read()
     if not data:
         return {"text": ""}
     lang = language if language in SUPPORTED else "es"
     try:
-        out = asr(
-            data,
-            generate_kwargs={"language": lang, "task": "transcribe"},
-            return_timestamps=False,
-        )
+        with GPU_LOCK:
+            out = asr(
+                data,
+                generate_kwargs={"language": lang, "task": "transcribe"},
+                return_timestamps=False,
+            )
         return {"text": (out.get("text") or "").strip()}
     except Exception as e:
         import traceback
@@ -258,22 +269,25 @@ async def stt(audio: UploadFile = File(...), language: str = Form("es")):
         raise HTTPException(500, f"stt error: {type(e).__name__}: {e}")
 
 # ---- TTS streaming: texto -> voz (por trozos) ----
+# Mantiene el GPU_LOCK durante TODO el streaming para que no se solape con otra
+# inferencia (evita el device-side assert). Si el cliente corta, el 'with' libera.
 def pcm_generator(text, lang):
-    for sent in split_text(text):
-        for chunk in model.inference_stream(
-            sent, lang, gpt_latent, spk_emb,
-            temperature=0.75,
-            length_penalty=1.0,
-            repetition_penalty=5.0,
-            top_k=50,
-            top_p=0.85,
-            speed=1.0,
-            enable_text_splitting=False,
-            stream_chunk_size=40,
-        ):
-            a = chunk.detach().cpu().numpy().astype(np.float32)
-            a = np.clip(a, -1.0, 1.0)
-            yield (a * 32767.0).astype("<i2").tobytes()
+    with GPU_LOCK:
+        for sent in split_text(text):
+            for chunk in model.inference_stream(
+                sent, lang, gpt_latent, spk_emb,
+                temperature=0.75,
+                length_penalty=1.0,
+                repetition_penalty=5.0,
+                top_k=50,
+                top_p=0.85,
+                speed=1.0,
+                enable_text_splitting=False,
+                stream_chunk_size=40,
+            ):
+                a = chunk.detach().cpu().numpy().astype(np.float32)
+                a = np.clip(a, -1.0, 1.0)
+                yield (a * 32767.0).astype("<i2").tobytes()
 
 @app.post("/tts_stream")
 def tts_stream(r: R):
@@ -295,23 +309,24 @@ def tts_full(r: R):
     text = r.text.strip()
     if not text:
         raise HTTPException(400, "vacio")
-    if STREAM_OK:
-        pieces = []
-        for sent in split_text(text):
-            out = model.inference(
-                sent, lang, gpt_latent, spk_emb,
-                temperature=0.75,
-                length_penalty=1.0,
-                repetition_penalty=5.0,
-                top_k=50,
-                top_p=0.85,
-                speed=1.0,
-                enable_text_splitting=False,
-            )
-            pieces.append(np.array(out["wav"], dtype=np.float32))
-        wav = np.concatenate(pieces) if pieces else np.zeros(1, dtype=np.float32)
-    else:
-        wav = _tts.tts(text=text, speaker_wav=REF_WAV, language=lang)
+    with GPU_LOCK:
+        if STREAM_OK:
+            pieces = []
+            for sent in split_text(text):
+                out = model.inference(
+                    sent, lang, gpt_latent, spk_emb,
+                    temperature=0.75,
+                    length_penalty=1.0,
+                    repetition_penalty=5.0,
+                    top_k=50,
+                    top_p=0.85,
+                    speed=1.0,
+                    enable_text_splitting=False,
+                )
+                pieces.append(np.array(out["wav"], dtype=np.float32))
+            wav = np.concatenate(pieces) if pieces else np.zeros(1, dtype=np.float32)
+        else:
+            wav = _tts.tts(text=text, speaker_wav=REF_WAV, language=lang)
     import soundfile as sf
     buf = io.BytesIO()
     sf.write(buf, np.array(wav, dtype=np.float32), 24000, format="WAV")
